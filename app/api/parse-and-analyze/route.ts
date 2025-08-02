@@ -104,27 +104,73 @@ export async function POST(req: Request) {
 
     // Flatten product URLs
     const productLinks: Link[] = collectionGroups.flatMap(g => g.products)
+    
+    console.log(`Found ${collections.length} collections:`, collections.map(c => c.url))
+    console.log(`Found ${productLinks.length} total product URLs:`)
+    productLinks.slice(0, 10).forEach((p, i) => console.log(`  ${i+1}. ${p.url}`))
 
-    // 3) Ask OpenAI for top 10 popular products
+    // 3) Ask OpenAI for top 10 popular products (only if we have URLs to work with)
+    if (productLinks.length === 0) {
+      console.log('No product URLs found - collections may be empty or not contain product links')
+      return NextResponse.json({
+        collections: collectionGroups,
+        topProducts: [],
+        analysis: null,
+        stats: {
+          collections: collectionGroups.length,
+          productsFetched: 0,
+        },
+        error: 'No product URLs found on this website'
+      })
+    }
+
     // Build prompt string with URLs
     const urlList = productLinks.map(p => p.url).slice(0, 100).join('\n')
-    const prompt = `You are given a list of product page URLs from an e-commerce website.  Pick the 10 most popular/best-selling products.  Output JSON array under key \"topProducts\" with \n[{\"url\":...,\"title\":...,\"reason\":...}]`;
+    console.log(`Sending ${Math.min(productLinks.length, 100)} URLs to OpenAI for selection`)
+    const prompt = `CRITICAL: You must ONLY select URLs from the exact list provided below. Do NOT generate, create, or invent any URLs. If the provided list is empty or contains no valid product URLs, return an empty array.
+
+You are given a list of product page URLs from an e-commerce website. Pick UP TO 10 products that seem most popular/important based on the URL structure and patterns. 
+
+REQUIREMENTS:
+- ONLY use URLs from the provided list
+- Do NOT create example.com or any fictional URLs
+- If no suitable URLs exist in the list, return empty array
+- Output JSON with key "topProducts" containing array of objects with url, title, reason
+
+PROVIDED URLs:`;
+
     const { default: OpenAI } = await import('openai')
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
     const resp = await openai.chat.completions.create({
       model: 'gpt-4-turbo-preview',
       messages: [
-        { role: 'system', content: 'You are an expert e-commerce analyst.' },
-        { role: 'user', content: `${prompt}\n\nURLs:\n${urlList}` }
+        { role: 'system', content: 'You are an expert e-commerce analyst. You must NEVER generate fictional URLs. Only use URLs provided in the prompt.' },
+        { role: 'user', content: `${prompt}\n\n${urlList}` }
       ],
       response_format: { type: 'json_object' }
     })
 
     const parsed = JSON.parse(resp.choices[0].message.content || '{}') as { topProducts: Array<{url: string, title: string, reason?: string}> }
-    const topProducts = (parsed.topProducts || []).slice(0, 10)
+    const rawTopProducts = (parsed.topProducts || []).slice(0, 10)
+    
+    console.log(`OpenAI returned ${rawTopProducts.length} products:`)
+    rawTopProducts.forEach((p, i) => console.log(`  ${i+1}. ${p.url}`))
+    
+    // CRITICAL: Validate that all returned URLs were actually in our original list
+    const originalUrls = new Set(productLinks.map(p => p.url))
+    const validatedTopProducts = rawTopProducts.filter(product => {
+      if (!originalUrls.has(product.url)) {
+        console.warn(`❌ OpenAI returned URL not in original list: ${product.url} - FILTERING OUT`)
+        return false
+      }
+      console.log(`✅ Valid URL: ${product.url}`)
+      return true
+    })
+    
+    console.log(`After validation: ${validatedTopProducts.length} valid products`)
     
     // Ensure topProducts have the correct structure for the component
-    const formattedTopProducts = topProducts.map(product => ({
+    const formattedTopProducts = validatedTopProducts.map(product => ({
       url: product.url,
       title: product.title,
       reason: product.reason
@@ -133,7 +179,7 @@ export async function POST(req: Request) {
 
     // 4) Fetch HTML for each top product (rate-limit 1/sec)
     const pageContents: PageContent[] = []
-    for (const product of topProducts) {
+    for (const product of validatedTopProducts) {
       try {
         const html = await fetchHtml(product.url)
         pageContents.push({ url: product.url, pageType: 'product', content: html })
@@ -143,7 +189,21 @@ export async function POST(req: Request) {
       }
     }
 
-    // 5) Consolidated analysis
+    // 5) Only run analysis if we actually have product content
+    if (pageContents.length === 0) {
+      return NextResponse.json({
+        collections: collectionGroups,
+        topProducts: formattedTopProducts,
+        analysis: null,
+        stats: {
+          collections: collectionGroups.length,
+          productsFetched: 0,
+        },
+        error: 'No product pages could be analyzed successfully'
+      })
+    }
+
+    // Consolidated analysis
     const digitalSources: DigitalSource[] = [createDigitalSource('website', url, homeHtml, url)]
     const brandPos = await inferBrandPositioning(pageContents, digitalSources)
     const analysisCore = await analyzeConsolidated(pageContents, digitalSources, brandPos)

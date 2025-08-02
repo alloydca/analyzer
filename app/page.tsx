@@ -174,30 +174,6 @@ export default function Home() {
         </form>
       </div>
 
-      {parseResults && (
-        <div className="section">
-          <h2>Collections & Products</h2>
-          {parseResults.collections.map((group, idx) => (
-            <div key={idx} style={{ marginBottom: '24px' }}>
-              <h3>
-                <a href={group.collection.url} target="_blank" rel="noopener noreferrer">
-                  {group.collection.text || group.collection.url}
-                </a>
-              </h3>
-              <ul style={{ marginLeft: '16px', marginTop: '8px' }}>
-                {group.products.map((p, i) => (
-                  <li key={i}>
-                    <a href={p.url} target="_blank" rel="noopener noreferrer">
-                      {p.text || p.url}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-      )}
-
       {extractedLinks && (
         <div>
           <div className="section">

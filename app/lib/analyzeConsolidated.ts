@@ -61,10 +61,27 @@ Return your analysis in the following JSON format:
   "seoAiBestPractices": {
     "score": number (1-100),
     "summary": "1-3 sentences summarizing traditional SEO and AI discoverability - how well AI assistants can find, understand, and feature these products in chat recommendations"
-  }
+  },
+  "problematicContent": [
+    {
+      "content": "Exact text excerpt that is problematic (keep under 200 characters)",
+      "issue": "Clear explanation of why this content is problematic and how it impacts performance",
+      "location": "URL or specific section where this content was found"
+    }
+  ]
 }
 
-Be specific about what drives each score and reference patterns you see across multiple pages in your summaries.`
+Be specific about what drives each score and reference patterns you see across multiple pages in your summaries. 
+
+For problematicContent, identify the 3 most critical pieces of TEXTUAL CONTENT that are hurting brand alignment, conversion effectiveness, or SEO/AI discoverability. Focus on content issues such as:
+- Misleading, vague, or contradictory written content
+- Poor product descriptions or messaging
+- Missing or inadequate textual information
+- Content that lacks semantic structure or schema.org markup
+- Text that confuses brand positioning or messaging
+- Written content that fails to drive conversion or action
+
+DO NOT focus on technical HTML/CSS/programming issues, but DO include problems with semantic markup, structured data, or schema.org implementation that affect content discoverability.`
 
   const completion = await openai.chat.completions.create({
     model: "gpt-4-turbo-preview",
@@ -88,6 +105,7 @@ Be specific about what drives each score and reference patterns you see across m
     executiveSummary: analysis.executiveSummary || 'Unable to generate executive summary',
     brandAlignment: analysis.brandAlignment || { score: 0, summary: 'Unable to analyze brand alignment' },
     conversionEffectiveness: analysis.conversionEffectiveness || { score: 0, summary: 'Unable to analyze conversion effectiveness' },
-    seoAiBestPractices: analysis.seoAiBestPractices || { score: 0, summary: 'Unable to analyze SEO and AI discoverability' }
+    seoAiBestPractices: analysis.seoAiBestPractices || { score: 0, summary: 'Unable to analyze SEO and AI discoverability' },
+    problematicContent: analysis.problematicContent || []
   }
 }

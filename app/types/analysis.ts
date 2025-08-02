@@ -61,4 +61,9 @@ export interface ConsolidatedAnalysis {
     score: number // 1-100
     summary: string // 1-3 sentences
   }
+  problematicContent: Array<{
+    content: string // The specific problematic content
+    issue: string // Why it's problematic
+    location: string // Where it was found (URL or section)
+  }>
 } 

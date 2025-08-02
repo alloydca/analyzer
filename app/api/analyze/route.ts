@@ -1,11 +1,9 @@
 import { NextResponse } from 'next/server'
 import OpenAI from 'openai'
 import { fetchPageContent } from '../../lib/fetchPage'
-import { collectPageContent } from '../../lib/analyzePage'
-import { inferBrandPositioning } from '../../lib/inferBrandPositioning'
-import { analyzeConsolidated } from '../../lib/analyzeConsolidated'
-import { extractBrandName, createDigitalSource, DigitalSource } from '../../lib/gatherDigitalSources'
-import { InitialAnalysis, PageContent, ConsolidatedAnalysis } from '../../types/analysis'
+import { analyzePage } from '../../lib/analyzePage'
+import { generateSummary } from '../../lib/generateSummary'
+import { InitialAnalysis, PageAnalysis, AnalysisSummary } from '../../types/analysis'
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -25,48 +23,36 @@ export async function POST(request: Request) {
       messages: [
         {
           role: "system",
-          content: `You are an expert at analyzing e-commerce websites. Your task is to identify the top 20 product URLs and 4 category URLs from the given website content, ranked by popularity/prominence on the site.
+          content: `You are an expert at analyzing e-commerce websites. Your task is to identify the top 10 product URLs and 2 category URLs from the given website content. 
           
-          CRITICAL REQUIREMENTS:
-          1. ONLY extract URLs that are explicitly mentioned in the provided content as clickable links
-          2. Look for URLs in the "KEY LINKS FOUND:" section - these are the actual working links from the page
-          3. Focus on complete, fully-formed URLs (not relative paths)
-          4. Prioritize URLs that appear multiple times or are prominently featured
-          5. Do NOT construct or invent URLs - only use what's explicitly provided
-          
-          RANKING CRITERIA (most important first):
-          - URLs that appear multiple times in the content
-          - URLs with descriptive anchor text indicating products/categories
-          - URLs that follow common e-commerce patterns (/products/, /collections/, /category/, etc.)
+          IMPORTANT: Only return URLs that actually exist in the provided content. Do not make up or invent URLs.
           
           Return the results in a structured JSON format with the following structure:
           {
             "products": [
               {
-                "url": "https://exacturl.com/from/content",
-                "title": "Exact Link Text or Product Name",
-                "description": "Brief description based on content",
-                "confidence": "high|medium|low"
+                "url": "https://actualwebsite.com/actual-product-path",
+                "title": "Actual Product Title",
+                "description": "Brief description based on content"
               }
             ],
             "categories": [
               {
-                "url": "https://exacturl.com/from/content", 
-                "title": "Exact Link Text or Category Name",
-                "description": "Brief description based on content",
-                "confidence": "high|medium|low"
+                "url": "https://actualwebsite.com/actual-category-path",
+                "title": "Actual Category Title",
+                "description": "Brief description based on content"
               }
             ]
           }
           
-          Return UP TO 20 products and 4 categories, but ONLY include URLs that actually exist in the content. Better to return fewer accurate URLs than many broken ones.`
+          If you cannot find enough products or categories, return fewer items rather than making up URLs.`
         },
         {
           role: "user",
-          content: `Analyze this website content and extract the most prominent product and category URLs. Focus especially on the "KEY LINKS FOUND:" section for actual working links. Base URL: ${url}
+          content: `Analyze this website content and identify the top product URLs and category URLs. Base URL: ${url}
 
 Website Content:
-${mainPageContent.slice(0, 10000)}`
+${mainPageContent.slice(0, 8000)}`
         }
       ],
       response_format: { type: "json_object" }
@@ -82,115 +68,65 @@ ${mainPageContent.slice(0, 10000)}`
       throw new Error('Invalid response structure from OpenAI')
     }
 
-    // Sort URLs by confidence (high -> medium -> low) for better success rate
-    const sortedProducts = initialResults.products.sort((a, b) => {
-      const confidenceOrder = { 'high': 0, 'medium': 1, 'low': 2 }
-      const aConf = confidenceOrder[a.confidence || 'low']
-      const bConf = confidenceOrder[b.confidence || 'low']
-      return aConf - bConf
-    })
+    // Fetch and analyze each page
+    const pageAnalyses: PageAnalysis[] = []
+    let successfulAnalyses = 0
+    let failedAnalyses = 0
     
-    const sortedCategories = initialResults.categories.sort((a, b) => {
-      const confidenceOrder = { 'high': 0, 'medium': 1, 'low': 2 }
-      const aConf = confidenceOrder[a.confidence || 'low']
-      const bConf = confidenceOrder[b.confidence || 'low']
-      return aConf - bConf
-    })
-
-    // Fetch and collect content from each page until we reach targets
-    const pageContents: PageContent[] = []
-    let successfulProducts = 0
-    let successfulCategories = 0
-    let failedPages = 0
-    
-    const TARGET_PRODUCTS = 10
-    const TARGET_CATEGORIES = 2
-    
-    // Process products until we have 10 successful ones
-    console.log(`Attempting to collect ${TARGET_PRODUCTS} product pages from ${sortedProducts.length} candidates...`)
-    for (const product of sortedProducts) {
-      if (successfulProducts >= TARGET_PRODUCTS) {
-        console.log(`✓ Reached target of ${TARGET_PRODUCTS} product pages`)
-        break
-      }
-      
+    // Process products
+    for (const product of initialResults.products) {
       try {
-        console.log(`Collecting content from product page: ${product.url} (confidence: ${product.confidence || 'unknown'})`)
+        console.log(`Analyzing product page: ${product.url}`)
         const content = await fetchPageContent(product.url)
-        const pageContent = await collectPageContent(product.url, content, 'product')
-        pageContents.push(pageContent)
-        successfulProducts++
-        console.log(`✓ Successfully collected: ${product.url} (${successfulProducts}/${TARGET_PRODUCTS} products)`)
+        const analysis = await analyzePage(product.url, content, 'product')
+        pageAnalyses.push(analysis)
+        successfulAnalyses++
+        console.log(`✓ Successfully analyzed: ${product.url}`)
         // Add a small delay between requests
         await new Promise(resolve => setTimeout(resolve, 500))
       } catch (error) {
-        failedPages++
-        console.error(`✗ Failed to collect content from product page ${product.url}:`, error instanceof Error ? error.message : 'Unknown error')
+        failedAnalyses++
+        console.error(`✗ Failed to analyze product page ${product.url}:`, error instanceof Error ? error.message : 'Unknown error')
         // Continue to next page instead of stopping
       }
     }
 
-    // Process categories until we have 2 successful ones
-    console.log(`Attempting to collect ${TARGET_CATEGORIES} category pages from ${sortedCategories.length} candidates...`)
-    for (const category of sortedCategories) {
-      if (successfulCategories >= TARGET_CATEGORIES) {
-        console.log(`✓ Reached target of ${TARGET_CATEGORIES} category pages`)
-        break
-      }
-      
+    // Process categories
+    for (const category of initialResults.categories) {
       try {
-        console.log(`Collecting content from category page: ${category.url} (confidence: ${category.confidence || 'unknown'})`)
+        console.log(`Analyzing category page: ${category.url}`)
         const content = await fetchPageContent(category.url)
-        const pageContent = await collectPageContent(category.url, content, 'category')
-        pageContents.push(pageContent)
-        successfulCategories++
-        console.log(`✓ Successfully collected: ${category.url} (${successfulCategories}/${TARGET_CATEGORIES} categories)`)
+        const analysis = await analyzePage(category.url, content, 'category')
+        pageAnalyses.push(analysis)
+        successfulAnalyses++
+        console.log(`✓ Successfully analyzed: ${category.url}`)
         // Add a small delay between requests
         await new Promise(resolve => setTimeout(resolve, 500))
       } catch (error) {
-        failedPages++
-        console.error(`✗ Failed to collect content from category page ${category.url}:`, error instanceof Error ? error.message : 'Unknown error')
+        failedAnalyses++
+        console.error(`✗ Failed to analyze category page ${category.url}:`, error instanceof Error ? error.message : 'Unknown error')
         // Continue to next page instead of stopping
       }
     }
 
-    const totalSuccessful = successfulProducts + successfulCategories
-    console.log(`Content collection complete: ${totalSuccessful} successful (${successfulProducts} products, ${successfulCategories} categories), ${failedPages} failed`)
+    console.log(`Analysis complete: ${successfulAnalyses} successful, ${failedAnalyses} failed`)
 
-    // Only proceed if we have at least one successful page
-    if (pageContents.length === 0) {
+    // Only generate summary if we have at least one successful analysis
+    if (pageAnalyses.length === 0) {
       throw new Error('No pages could be analyzed successfully')
     }
 
-    // Prepare digital sources for comprehensive brand analysis
-    // TODO: In production, this would gather external sources like social media, reviews, press coverage
-    const digitalSources: DigitalSource[] = [
-      createDigitalSource('website', url, mainPageContent, url)
-    ]
-
-    // Infer brand positioning from all collected content
-    console.log('Inferring brand positioning...')
-    const brandPositioning = await inferBrandPositioning(pageContents, digitalSources)
-
-    // Perform consolidated analysis across business dimensions
-    console.log('Performing consolidated analysis...')
-    const consolidatedAnalysis = await analyzeConsolidated(pageContents, digitalSources, brandPositioning)
-
-    // Combine results
-    const analysis: ConsolidatedAnalysis = {
-      ...consolidatedAnalysis,
-      inferredBrandPositioning: brandPositioning
-    }
+    // Generate summary
+    const summary = await generateSummary(pageAnalyses)
 
     return NextResponse.json({
       initialResults,
-      analysis,
+      pageAnalyses,
+      summary,
       stats: {
-        successful: totalSuccessful,
-        failed: failedPages, 
-        total: initialResults.products.length + initialResults.categories.length,
-        productsCollected: successfulProducts,
-        categoriesCollected: successfulCategories
+        successful: successfulAnalyses,
+        failed: failedAnalyses,
+        total: initialResults.products.length + initialResults.categories.length
       }
     })
 

@@ -12,7 +12,7 @@ interface Product {
 
 interface AnalysisResultsProps {
   initialResults?: InitialAnalysis
-  analysis: ConsolidatedAnalysis
+  analysis: ConsolidatedAnalysis | null
   topProducts?: Product[]
   error?: string
   stats?: {
@@ -43,18 +43,28 @@ export default function AnalysisResults({ initialResults, analysis, topProducts,
 
   // Helper function to get score color based on score
   const getScoreColor = (score: number) => {
-    if (score >= 80) return '#22c55e' // green
-    if (score >= 60) return '#f59e0b' // yellow
-    if (score >= 40) return '#f97316' // orange
-    return '#ef4444' // red
+    if (score >= 90) return '#22c55e' // green - Excellent
+    if (score >= 80) return '#f59e0b' // yellow - Good
+    return '#ef4444' // red - Poor
   }
 
   // Helper function to get score label
   const getScoreLabel = (score: number) => {
-    if (score >= 80) return 'Excellent'
-    if (score >= 60) return 'Good'
-    if (score >= 40) return 'Fair'
-    return 'Needs Improvement'
+    if (score >= 90) return 'Excellent'
+    if (score >= 80) return 'Good'
+    return 'Poor'
+  }
+
+  // Check if analysis was performed (analysis will be null if no products were analyzed)
+  if (!analysis) {
+    return (
+      <div>
+        <div className="section">
+          <h2>No Analysis Available</h2>
+          <p>No product pages could be analyzed from this website. Please ensure the website has accessible product pages and try again.</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -76,14 +86,6 @@ export default function AnalysisResults({ initialResults, analysis, topProducts,
       <div className="section">
         <h2>Executive Summary</h2>
         <p>{analysis.executiveSummary}</p>
-      </div>
-
-      {/* Inferred Brand Positioning */}
-      <div className="section">
-        <h2>Inferred Brand Positioning</h2>
-        <p style={{ fontStyle: 'italic', backgroundColor: '#f8f9fa', padding: '16px', borderRadius: '8px', border: '1px solid #e9ecef' }}>
-          {analysis.inferredBrandPositioning}
-        </p>
       </div>
 
       {/* Brand Alignment Score */}
@@ -161,61 +163,75 @@ export default function AnalysisResults({ initialResults, analysis, topProducts,
         <p>{analysis.seoAiBestPractices.summary}</p>
       </div>
 
-      {/* Products Analyzed */}
-      {(topProducts?.length > 0 || initialResults?.products?.length > 0) && (
+      {/* Problematic Content */}
+      {analysis.problematicContent && analysis.problematicContent.length > 0 && (
         <div className="section">
-          <h2>Products Analyzed ({(topProducts || initialResults?.products || []).length})</h2>
-          <p>These are the products that were actually analyzed to generate the above insights:</p>
+          <h2>Most Problematic Content</h2>
+          <p>These are the 3 most critical content issues that need immediate attention:</p>
           <div style={{ 
             display: 'grid', 
             gap: '16px', 
-            marginTop: '16px',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))'
+            marginTop: '16px'
           }}>
-            {(topProducts || initialResults?.products || []).map((product, index) => (
+            {analysis.problematicContent.map((item, index) => (
               <div 
                 key={index} 
                 style={{
-                  border: '1px solid #e5e7eb',
+                  border: '1px solid #fecaca',
                   borderRadius: '8px',
                   padding: '16px',
-                  backgroundColor: '#f9fafb'
+                  backgroundColor: '#fef2f2',
+                  borderLeft: '4px solid #ef4444'
                 }}
               >
-                <h3 style={{
-                  margin: '0 0 8px 0',
-                  fontSize: '1.1rem',
-                  fontWeight: '600'
-                }}>
-                  <a 
-                    href={product.url} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    style={{
-                      color: '#1f2937',
-                      textDecoration: 'none'
-                    }}
-                    onMouseOver={(e) => e.currentTarget.style.textDecoration = 'underline'}
-                    onMouseOut={(e) => e.currentTarget.style.textDecoration = 'none'}
-                  >
-                    {product.title}
-                  </a>
-                </h3>
-                {(product.description || product.reason) && (
-                  <p style={{
-                    margin: '0 0 8px 0',
-                    color: '#6b7280',
-                    fontSize: '0.9rem'
-                  }}>
-                    {product.description || product.reason}
-                  </p>
-                )}
                 <div style={{
-                  fontSize: '0.8rem',
-                  color: '#9ca3af',
-                  wordBreak: 'break-all'
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '12px'
                 }}>
-                  {product.url}
+                  <div style={{
+                    backgroundColor: '#ef4444',
+                    color: 'white',
+                    borderRadius: '50%',
+                    width: '24px',
+                    height: '24px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '0.8rem',
+                    fontWeight: 'bold',
+                    flexShrink: 0
+                  }}>
+                    {index + 1}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{
+                      backgroundColor: '#f3f4f6',
+                      padding: '12px',
+                      borderRadius: '6px',
+                      marginBottom: '12px',
+                      fontFamily: 'monospace',
+                      fontSize: '0.9rem',
+                      border: '1px solid #d1d5db'
+                    }}>
+                      "{item.content}"
+                    </div>
+                    <h3 style={{
+                      margin: '0 0 8px 0',
+                      fontSize: '1rem',
+                      fontWeight: '600',
+                      color: '#dc2626'
+                    }}>
+                      Issue: {item.issue}
+                    </h3>
+                    <p style={{
+                      margin: '0',
+                      color: '#6b7280',
+                      fontSize: '0.9rem'
+                    }}>
+                      <strong>Location:</strong> {item.location}
+                    </p>
+                  </div>
                 </div>
               </div>
             ))}
