@@ -14,7 +14,7 @@ interface ExtractedLink {
 
 export default function Home() {
   const [url, setUrl] = useState('')
-  const [analysisMode, setAnalysisMode] = useState<AnalysisMode>('openai')
+  const [analysisMode, setAnalysisMode] = useState<AnalysisMode>('parse')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [extractedLinks, setExtractedLinks] = useState<ExtractedLink[] | null>(null)
@@ -142,6 +142,9 @@ export default function Home() {
                 })
                 setSseMessages(prev => [...prev, { type: 'initial', message: 'Top products selected' }])
               }
+              if (data.type === 'products_fetched') {
+                setSseMessages(prev => [...prev, { type: 'products_fetched', message: `Fetched ${data.count} product pages` }])
+              }
               if (data.type === 'progress') {
                 setSseMessages(prev => [...prev, { type: 'progress', message: data.message, category: data.category, step: data.step, total: data.total }])
               }
@@ -244,33 +247,7 @@ export default function Home() {
             />
           </div>
 
-          <div className="form-group">
-            <label>Analysis Approach</label>
-            <div style={{ display: 'flex', gap: '20px', marginTop: '8px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-                <input
-                  type="radio"
-                  name="analysisMode"
-                  value="openai"
-                  checked={analysisMode === 'openai'}
-                  onChange={(e) => setAnalysisMode(e.target.value as AnalysisMode)}
-                  style={{ marginRight: '8px' }}
-                />
-                Start with OpenAI
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-                <input
-                  type="radio"
-                  name="analysisMode"
-                  value="parse"
-                  checked={analysisMode === 'parse'}
-                  onChange={(e) => setAnalysisMode(e.target.value as AnalysisMode)}
-                  style={{ marginRight: '8px' }}
-                />
-                Parse the home page
-              </label>
-            </div>
-          </div>
+          {/* Removed Analysis Approach selection; defaulting to parse mode */}
 
           {error && <div className="error">{error}</div>}
 
@@ -279,7 +256,7 @@ export default function Home() {
             disabled={isLoading}
             className="btn"
           >
-            {isLoading ? (analysisMode === 'openai' ? 'Analyzing...' : 'Parsing...') : (analysisMode === 'openai' ? 'Analyze Website' : 'Parse Homepage')}
+            {isLoading ? (analysisMode === 'openai' ? 'Analyzing...' : 'Analyzing...') : (analysisMode === 'openai' ? 'Analyze Website' : 'Analyze Site Content')}
           </button>
         </form>
       </div>
@@ -398,21 +375,48 @@ export default function Home() {
           <div style={{ background: '#ffffff', borderRadius: 12, padding: 20, width: 'min(640px, 92vw)', maxHeight: '80vh', overflow: 'auto', boxShadow: '0 10px 30px rgba(0,0,0,0.2)' }}>
             <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 6 }}>Analyzing website…</h2>
             <p style={{ fontSize: 14, color: '#555', marginBottom: 12 }}>We’re collecting products and generating your analysis. This can take a couple of minutes.</p>
-            <div style={{ fontSize: 13, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 12 }}>
-              {(sseMessages.slice(-1)[0]?.message || 'Working…')}
+            {/* Step checklist */}
+            <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 12 }}>
+              {[
+                { key: 'start', label: 'Start analysis' },
+                { key: 'initial', label: 'Select top products' },
+                { key: 'products_fetched', label: 'Fetch product pages' },
+                { key: 'progress-brand', label: 'Analyze Brand Alignment' },
+                { key: 'progress-conv', label: 'Analyze Conversion Effectiveness' },
+                { key: 'progress-seo', label: 'Analyze SEO and AI Best Practices' },
+                { key: 'complete', label: 'Finalize report' }
+              ].map((step) => {
+                const hasStep = sseMessages.some(m => 
+                  m.type === step.key ||
+                  (step.key.startsWith('progress-') && m.type === 'category_complete' && (
+                    (step.key === 'progress-brand' && m.category === 'Brand Alignment') ||
+                    (step.key === 'progress-conv' && m.category === 'Conversion Effectiveness') ||
+                    (step.key === 'progress-seo' && m.category === 'SEO and AI Best Practices')
+                  ))
+                )
+                const isCurrent = !hasStep && (
+                  step.key === 'start' ||
+                  (step.key === 'initial' && sseMessages.some(m => m.type === 'start')) ||
+                  (step.key === 'products_fetched' && sseMessages.some(m => m.type === 'initial')) ||
+                  (step.key === 'progress-brand' && sseMessages.some(m => m.type === 'products_fetched')) ||
+                  (step.key === 'progress-conv' && sseMessages.some(m => m.type === 'category_complete' && m.category === 'Brand Alignment')) ||
+                  (step.key === 'progress-seo' && sseMessages.some(m => m.type === 'category_complete' && m.category === 'Conversion Effectiveness')) ||
+                  (step.key === 'complete' && sseMessages.some(m => m.type === 'category_complete' && m.category === 'SEO and AI Best Practices'))
+                )
+                return (
+                  <div key={step.key} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0' }}>
+                    <div style={{ width: 18, height: 18, borderRadius: 9999, border: '2px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', background: hasStep ? '#22c55e' : (isCurrent ? '#dbeafe' : '#fff') }}>
+                      {hasStep ? (
+                        <span style={{ color: '#fff', fontSize: 12 }}>✓</span>
+                      ) : (
+                        <span style={{ color: isCurrent ? '#1d4ed8' : '#9ca3af', fontSize: 10 }}>•</span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 14, color: '#111827', fontWeight: hasStep ? 600 : 400 }}>{step.label}</div>
+                  </div>
+                )
+              })}
             </div>
-            {sseMessages.length > 1 && (
-              <div style={{ marginTop: 12 }}>
-                <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>Recent updates</div>
-                <ul style={{ listStyle: 'disc', paddingLeft: 18, fontSize: 12, color: '#374151' }}>
-                  {sseMessages.slice(-8).map((m, idx) => (
-                    <li key={idx}>
-                      {m.message || m.type} {m.category ? `- ${m.category}` : ''} {m.step && m.total ? `(${m.step}/${m.total})` : ''}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
               <button onClick={cancelStreaming} className="btn" style={{ background: '#ef4444' }}>Cancel</button>
             </div>

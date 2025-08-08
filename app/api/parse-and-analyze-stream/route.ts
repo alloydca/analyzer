@@ -4,6 +4,7 @@ import { PageContent } from '../../types/analysis'
 import { inferBrandPositioning } from '../../lib/inferBrandPositioning'
 import { analyzeConsolidatedStreaming } from '../../lib/analyzeConsolidated'
 import { createDigitalSource, DigitalSource } from '../../lib/gatherDigitalSources'
+import { tryOpenAIChatJson } from '../../lib/aiModel'
 
 interface Link { url: string; text: string }
 interface CollectionGroup { collection: Link; products: Link[] }
@@ -32,8 +33,16 @@ function parseLinks(html: string, base: string): Link[] {
     
     const anchors = Array.from(dom.window.document.querySelectorAll('a')) as HTMLAnchorElement[]
     return anchors
-      .map(a => ({ url: a.href.trim(), text: (a.textContent || '').trim() }))
-      .filter(l => l.url.startsWith('http') && l.text)
+      .map(a => ({ 
+        url: a.href.trim(), 
+        text: (
+          (a.textContent || '') ||
+          a.getAttribute('aria-label') ||
+          a.getAttribute('title') ||
+          ''
+        ).toString().trim() 
+      }))
+      .filter(l => l.url.startsWith('http'))
   } catch (error) {
     console.error('JSDOM parsing error:', error)
     // Fallback: try to extract links using regex if JSDOM fails
@@ -96,10 +105,9 @@ export async function GET(request: NextRequest) {
           }
         }
 
-        // 2) Fetch each collection page → gather product links
-        const collectionGroups: CollectionGroup[] = []
-        for (const col of collections) {
-          try {
+        // 2) Fetch each collection page → gather product links (parallel)
+        const collectionResults = await Promise.allSettled(
+          collections.map(async (col) => {
             const colHtml = await fetchHtml(col.url)
             const colLinks = parseLinks(colHtml, col.url)
             const products: Link[] = []
@@ -110,11 +118,12 @@ export async function GET(request: NextRequest) {
                 seenProd.add(l.url)
               }
             }
-            collectionGroups.push({ collection: col, products })
-          } catch (e) {
-            console.error('Collection fetch failed', e)
-          }
-        }
+            return { collection: col, products }
+          })
+        )
+        const collectionGroups: CollectionGroup[] = collectionResults
+          .filter((r): r is PromiseFulfilledResult<CollectionGroup> => r.status === 'fulfilled')
+          .map(r => r.value)
 
         // Flatten product URLs
         const productLinks: Link[] = collectionGroups.flatMap(g => g.products)
@@ -144,17 +153,15 @@ PROVIDED URLs:`
 
         const { default: OpenAI } = await import('openai')
         const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-        const resp = await openai.chat.completions.create({
-          model: 'gpt-4-turbo-preview',
-          messages: [
+        const { result } = await tryOpenAIChatJson<{ topProducts: Array<{ url: string; title: string; reason?: string }> }>(
+          openai,
+          [
             { role: 'system', content: 'You are an expert e-commerce analyst. You must NEVER generate fictional URLs. Only use URLs provided in the prompt.' },
             { role: 'user', content: `${prompt}\n\n${urlList}` }
           ],
-          response_format: { type: 'json_object' }
-        })
-
-        const parsed = JSON.parse(resp.choices[0].message.content || '{}') as { topProducts: Array<{url: string, title: string, reason?: string}> }
-        const rawTopProducts = (parsed.topProducts || []).slice(0, 10)
+          { response_format: { type: 'json_object' }, temperature: 0.2 }
+        )
+        const rawTopProducts = (result?.topProducts || []).slice(0, 10)
         
         // Validate URLs
         const originalUrls = new Set(productLinks.map(p => p.url))
@@ -174,17 +181,16 @@ PROVIDED URLs:`
           stats: { collections: collectionGroups.length, productsFetched: 0 }
         })}\n\n`))
 
-        // 4) Fetch HTML for each top product (rate-limit 1/sec)
-        const pageContents: PageContent[] = []
-        for (const product of validatedTopProducts) {
-          try {
+        // 4) Fetch HTML for each top product (parallel)
+        const pageFetchResults = await Promise.allSettled(
+          validatedTopProducts.map(async (product) => {
             const html = await fetchHtml(product.url)
-            pageContents.push({ url: product.url, pageType: 'product', content: html })
-            await new Promise(r => setTimeout(r, 1000))
-          } catch (e) {
-            console.error('Product fetch failed', product.url, e)
-          }
-        }
+            return { url: product.url, pageType: 'product', content: html } as PageContent
+          })
+        )
+        const pageContents: PageContent[] = pageFetchResults
+          .filter((r): r is PromiseFulfilledResult<PageContent> => r.status === 'fulfilled')
+          .map(r => r.value)
 
         if (pageContents.length === 0) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({
@@ -194,6 +200,12 @@ PROVIDED URLs:`
           controller.close()
           return
         }
+
+        // Notify client that product pages have been fetched
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+          type: 'products_fetched',
+          count: pageContents.length
+        })}\n\n`))
 
         // 5) Consolidated analysis with streaming
         const digitalSources: DigitalSource[] = [createDigitalSource('website', url, homeHtml, url)]

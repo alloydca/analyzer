@@ -22,12 +22,20 @@ export function getOpenAIModelCandidates(): string[] {
   return models
 }
 
+// Cache the first model that succeeds so subsequent calls don't retry failing ones
+let cachedPreferredModel: string | null = null
+const failedModels = new Set<string>()
+
 export async function tryOpenAIChatJson<T = any>(
   openai: any,
   messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
   extra: { temperature?: number; response_format?: { type: 'json_object' } }
 ): Promise<{ result: T | null; modelUsed?: string; error?: unknown }> {
-  const models = getOpenAIModelCandidates()
+  const baseModels = getOpenAIModelCandidates().filter(m => !failedModels.has(m))
+  const models = cachedPreferredModel
+    ? [cachedPreferredModel, ...baseModels.filter(m => m !== cachedPreferredModel)]
+    : baseModels
+
   for (const model of models) {
     try {
       const completion = await openai.chat.completions.create({
@@ -38,11 +46,14 @@ export async function tryOpenAIChatJson<T = any>(
       })
       const content = completion?.choices?.[0]?.message?.content || ''
       const parsed = content ? JSON.parse(content) as T : ({} as T)
+      // Remember the model that worked
+      cachedPreferredModel = model
       return { result: parsed, modelUsed: model }
     } catch (error) {
       // Try next model
       // eslint-disable-next-line no-console
       console.error('[aiModel] model failed, trying next', { model, error: error instanceof Error ? error.message : String(error) })
+      failedModels.add(model)
     }
   }
   return { result: null, error: new Error('All models failed') }
