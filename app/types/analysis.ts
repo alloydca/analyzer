@@ -66,4 +66,9 @@ export interface ConsolidatedAnalysis {
     issue: string // Why it's problematic
     location: string // Where it was found (URL or section)
   }>
+  _debugInfo?: {
+    randomizedOrder: string[]
+    processingSequence: string
+    message: string
+  }
 } 

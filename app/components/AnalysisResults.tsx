@@ -8,6 +8,7 @@ interface Product {
   title: string
   description?: string
   reason?: string
+  image?: string
 }
 
 interface AnalysisResultsProps {
@@ -55,14 +56,70 @@ export default function AnalysisResults({ initialResults, analysis, topProducts,
     return 'Poor'
   }
 
-  // Check if analysis was performed (analysis will be null if no products were analyzed)
+  // If analysis is missing, still show products if present
   if (!analysis) {
     return (
       <div>
-        <div className="section">
-          <h2>No Analysis Available</h2>
-          <p>No product pages could be analyzed from this website. Please ensure the website has accessible product pages and try again.</p>
-        </div>
+        {topProducts && topProducts.length > 0 ? (
+          <div className="section">
+            <h2>Products Analyzed</h2>
+            <p>The following {topProducts.length} products were analyzed for this report:</p>
+            <div style={{ display: 'grid', gap: '12px', marginTop: '16px' }}>
+              {topProducts.map((product, index) => (
+                <div 
+                  key={index}
+                  style={{
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px',
+                    padding: '16px',
+                    backgroundColor: '#f9fafb'
+                  }}
+                >
+                  {product.image && (
+                    <div style={{ marginBottom: '8px' }}>
+                      <img
+                        src={product.image}
+                        alt={product.title}
+                        style={{ width: '100%', maxWidth: '300px', borderRadius: '6px', border: '1px solid #e5e7eb' }}
+                      />
+                    </div>
+                  )}
+                  <div style={{ marginBottom: '8px' }}>
+                    <strong style={{ color: '#374151' }}>{product.title}</strong>
+                  </div>
+                  <div style={{ marginBottom: '8px' }}>
+                    <a 
+                      href={product.url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      style={{ 
+                        color: '#3b82f6', 
+                        textDecoration: 'none',
+                        fontSize: '0.9rem'
+                      }}
+                    >
+                      {product.url}
+                    </a>
+                  </div>
+                  {product.reason && (
+                    <div style={{ 
+                      fontSize: '0.85rem', 
+                      color: '#6b7280',
+                      fontStyle: 'italic'
+                    }}>
+                      Selected because: {product.reason}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="section">
+            <h2>No Analysis Available</h2>
+            <p>No product pages could be analyzed from this website. Please ensure the website has accessible product pages and try again.</p>
+          </div>
+        )}
       </div>
     )
   }
@@ -81,6 +138,8 @@ export default function AnalysisResults({ initialResults, analysis, topProducts,
           </p>
         </div>
       )}
+
+      {/* Removed randomization verification section */}
 
       {/* Executive Summary */}
       <div className="section">
@@ -163,81 +222,63 @@ export default function AnalysisResults({ initialResults, analysis, topProducts,
         <p>{analysis.seoAiBestPractices.summary}</p>
       </div>
 
-      {/* Problematic Content */}
-      {analysis.problematicContent && analysis.problematicContent.length > 0 && (
+      {/* Products Analyzed */}
+      {topProducts && topProducts.length > 0 && (
         <div className="section">
-          <h2>Most Problematic Content</h2>
-          <p>These are the 3 most critical content issues that need immediate attention:</p>
-          <div style={{ 
-            display: 'grid', 
-            gap: '16px', 
-            marginTop: '16px'
-          }}>
-            {analysis.problematicContent.map((item, index) => (
+          <h2>Products Analyzed</h2>
+          <p>The following {topProducts.length} products were analyzed for this report:</p>
+          <div style={{ display: 'grid', gap: '12px', marginTop: '16px' }}>
+            {topProducts.map((product, index) => (
               <div 
-                key={index} 
+                key={index}
                 style={{
-                  border: '1px solid #fecaca',
+                  border: '1px solid #e5e7eb',
                   borderRadius: '8px',
                   padding: '16px',
-                  backgroundColor: '#fef2f2',
-                  borderLeft: '4px solid #ef4444'
+                  backgroundColor: '#f9fafb'
                 }}
               >
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '12px'
-                }}>
-                  <div style={{
-                    backgroundColor: '#ef4444',
-                    color: 'white',
-                    borderRadius: '50%',
-                    width: '24px',
-                    height: '24px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '0.8rem',
-                    fontWeight: 'bold',
-                    flexShrink: 0
-                  }}>
-                    {index + 1}
+                {product.image && (
+                  <div style={{ marginBottom: '8px' }}>
+                    <img
+                      src={product.image}
+                      alt={product.title}
+                      style={{ width: '100%', maxWidth: '300px', borderRadius: '6px', border: '1px solid #e5e7eb' }}
+                    />
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{
-                      backgroundColor: '#f3f4f6',
-                      padding: '12px',
-                      borderRadius: '6px',
-                      marginBottom: '12px',
-                      fontFamily: 'monospace',
-                      fontSize: '0.9rem',
-                      border: '1px solid #d1d5db'
-                    }}>
-                      "{item.content}"
-                    </div>
-                    <h3 style={{
-                      margin: '0 0 8px 0',
-                      fontSize: '1rem',
-                      fontWeight: '600',
-                      color: '#dc2626'
-                    }}>
-                      Issue: {item.issue}
-                    </h3>
-                    <p style={{
-                      margin: '0',
-                      color: '#6b7280',
-                      fontSize: '0.9rem'
-                    }}>
-                      <strong>Location:</strong> {item.location}
-                    </p>
-                  </div>
+                )}
+                <div style={{ marginBottom: '8px' }}>
+                  <strong style={{ color: '#374151' }}>{product.title}</strong>
                 </div>
+                <div style={{ marginBottom: '8px' }}>
+                  <a 
+                    href={product.url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    style={{ 
+                      color: '#3b82f6', 
+                      textDecoration: 'none',
+                      fontSize: '0.9rem'
+                    }}
+                  >
+                    {product.url}
+                  </a>
+                </div>
+                {product.reason && (
+                  <div style={{ 
+                    fontSize: '0.85rem', 
+                    color: '#6b7280',
+                    fontStyle: 'italic'
+                  }}>
+                    Selected because: {product.reason}
+                  </div>
+                )}
               </div>
             ))}
           </div>
         </div>
       )}
+
     </div>
   )
 } 
