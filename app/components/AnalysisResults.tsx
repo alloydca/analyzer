@@ -27,6 +27,7 @@ interface AnalysisResultsProps {
 
 export default function AnalysisResults({ initialResults, analysis, topProducts, error, stats }: AnalysisResultsProps) {
   const isForbiddenError = error?.toLowerCase().includes('forbidden')
+  const [shareLogged, setShareLogged] = React.useState(false)
 
   if (isForbiddenError) {
     return (
@@ -126,25 +127,187 @@ export default function AnalysisResults({ initialResults, analysis, topProducts,
 
   return (
     <div>
-      {/* Analysis Statistics */}
-      {stats && (
-        <div className="section">
-          <h2>Analysis Summary</h2>
-          <p>
+      {/* Combined Analysis Summary & Executive Summary */}
+      <div className="section">
+        <h2>Analysis Summary</h2>
+        {stats && (
+          <p style={{ marginBottom: '20px' }}>
             Successfully analyzed <strong>{stats.successful}</strong> pages
             {stats.productsCollected !== undefined && stats.categoriesCollected !== undefined && (
               <span> ({stats.productsCollected} products, {stats.categoriesCollected} categories)</span>
             )}
           </p>
+        )}
+        
+        <p style={{ marginBottom: '24px' }}>{analysis.executiveSummary}</p>
+        
+        {/* Small Score Cards */}
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(4, 1fr)', 
+          gap: '16px',
+          marginBottom: '24px' 
+        }}>
+          <div style={{
+            padding: '16px',
+            border: '1px solid #e5e7eb',
+            borderRadius: '8px',
+            backgroundColor: '#f9fafb',
+            textAlign: 'center'
+          }}>
+            <div style={{ 
+              fontSize: '24px', 
+              fontWeight: 'bold', 
+              color: getScoreColor(analysis.brandAlignment.score),
+              marginBottom: '4px'
+            }}>
+              {analysis.brandAlignment.score}
+            </div>
+            <div style={{ fontSize: '14px', fontWeight: '600', color: '#374151' }}>
+              Brand Alignment
+            </div>
+          </div>
+          
+          <div style={{
+            padding: '16px',
+            border: '1px solid #e5e7eb',
+            borderRadius: '8px',
+            backgroundColor: '#f9fafb',
+            textAlign: 'center'
+          }}>
+            <div style={{ 
+              fontSize: '24px', 
+              fontWeight: 'bold', 
+              color: getScoreColor(analysis.conversionEffectiveness.score),
+              marginBottom: '4px'
+            }}>
+              {analysis.conversionEffectiveness.score}
+            </div>
+            <div style={{ fontSize: '14px', fontWeight: '600', color: '#374151' }}>
+              Conversion Effectiveness
+            </div>
+          </div>
+          
+          <div style={{
+            padding: '16px',
+            border: '1px solid #e5e7eb',
+            borderRadius: '8px',
+            backgroundColor: '#f9fafb',
+            textAlign: 'center'
+          }}>
+            <div style={{ 
+              fontSize: '24px', 
+              fontWeight: 'bold', 
+              color: getScoreColor(analysis.seoAiBestPractices.score),
+              marginBottom: '4px'
+            }}>
+              {analysis.seoAiBestPractices.score}
+            </div>
+            <div style={{ fontSize: '14px', fontWeight: '600', color: '#374151' }}>
+              SEO & AI Best Practices
+            </div>
+          </div>
+          
+          <div style={{
+            padding: '16px',
+            border: '1px solid #e5e7eb',
+            borderRadius: '8px',
+            backgroundColor: '#f9fafb',
+            textAlign: 'center'
+          }}>
+            <div style={{ 
+              fontSize: '24px', 
+              fontWeight: 'bold', 
+              color: getScoreColor(Math.round((analysis.brandAlignment.score + analysis.conversionEffectiveness.score + analysis.seoAiBestPractices.score) / 3)),
+              marginBottom: '4px'
+            }}>
+              {Math.round((analysis.brandAlignment.score + analysis.conversionEffectiveness.score + analysis.seoAiBestPractices.score) / 3)}
+            </div>
+            <div style={{ fontSize: '14px', fontWeight: '600', color: '#374151' }}>
+              Overall Score
+            </div>
+          </div>
         </div>
-      )}
-
-      {/* Removed randomization verification section */}
-
-      {/* Executive Summary */}
-      <div className="section">
-        <h2>Executive Summary</h2>
-        <p>{analysis.executiveSummary}</p>
+        
+        {/* Share Link */}
+        <div style={{
+          padding: '16px',
+          backgroundColor: '#f9fafb',
+          border: '1px solid #e5e7eb',
+          borderRadius: '8px',
+          textAlign: 'center'
+        }}>
+          <p style={{ margin: '0 0 12px 0', fontSize: '14px', color: '#444343' }}>
+            Want to share these results with your team?
+          </p>
+          <div id="shareUrlContainer" style={{ display: 'none', marginBottom: '12px' }}>
+            <input
+              type="text"
+              id="shareUrl"
+              readOnly
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                fontSize: '13px',
+                border: '1px solid #d1d5db',
+                borderRadius: '4px',
+                backgroundColor: '#ffffff',
+                color: '#374151',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
+          <button 
+            onClick={async () => {
+              const shareData = {
+                email: window.leadEmail || '',
+                url: window.analyzedUrl || ''
+              }
+              const encodedData = btoa(JSON.stringify(shareData))
+              const currentUrl = new URL(window.location.href)
+              const shareUrl = `${currentUrl.origin}${currentUrl.pathname}?s=${encodedData}`
+              
+              // Show URL and copy to clipboard
+              document.getElementById('shareUrl').value = shareUrl
+              document.getElementById('shareUrlContainer').style.display = 'block'
+              navigator.clipboard.writeText(shareUrl)
+              
+              // Add note to Brevo that user shared results (only once)
+              if (!shareLogged) {
+                fetch('/api/brevo-notes', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    contactEmail: window.leadEmail,
+                    message: `User shared analysis results for ${window.analyzedUrl}`,
+                    noteType: 'analysis-shared'
+                  })
+                })
+                setShareLogged(true)
+              }
+              
+              // Show feedback
+              const button = event.target
+              const originalText = button.textContent
+              button.textContent = 'Link Copied!'
+              setTimeout(() => {
+                button.textContent = originalText
+              }, 2000)
+            }}
+            style={{
+              padding: '8px 16px',
+              fontSize: '14px',
+              fontWeight: '600',
+              color: '#ff4500',
+              backgroundColor: 'transparent',
+              border: '1px solid #ff4500',
+              borderRadius: '6px',
+              cursor: 'pointer'
+            }}
+          >
+            Copy Share Link
+          </button>
+        </div>
       </div>
 
       {/* Brand Alignment Score */}

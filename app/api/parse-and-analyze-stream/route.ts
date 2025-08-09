@@ -13,8 +13,40 @@ const COLLECTION_PATTERNS = ['/collections/', '/category/', '/categories/', '/sh
 const PRODUCT_PATTERNS = ['/products/', '/product/', '/item/', '/items/', '/p/']
 
 async function fetchHtml(url: string): Promise<string> {
-  const res = await fetch(url)
-  if (!res.ok) throw new Error(`Fetch failed ${url}: ${res.status}`)
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (compatible; ProductAnalyzer/1.0; +https://analyzer.com/bot)'
+    }
+  })
+  
+  if (!res.ok) {
+    let errorMessage = `Unable to access ${url}`
+    
+    switch (res.status) {
+      case 403:
+        errorMessage = `This website (${new URL(url).hostname}) is blocking automated requests. This is common with sites that have bot protection enabled. Please try a different e-commerce website.`
+        break
+      case 404:
+        errorMessage = `The page at ${url} was not found. The website may have changed its structure.`
+        break
+      case 429:
+        errorMessage = `This website is rate-limiting our requests. Please wait a few minutes and try again.`
+        break
+      case 500:
+      case 502:
+      case 503:
+      case 504:
+        errorMessage = `The website ${new URL(url).hostname} appears to be experiencing technical difficulties. Please try again later.`
+        break
+      case 401:
+        errorMessage = `This website requires authentication that we cannot provide. Please try a publicly accessible e-commerce site.`
+        break
+      default:
+        errorMessage = `Unable to access ${new URL(url).hostname} (Error ${res.status}). The website may be blocking automated requests or experiencing issues.`
+    }
+    
+    throw new Error(errorMessage)
+  }
   return res.text()
 }
 

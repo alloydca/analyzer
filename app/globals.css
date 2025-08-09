@@ -19,6 +19,18 @@ body {
   padding: 20px;
 }
 
+/* Honeypot field - hidden from humans, visible to bots */
+.hp-field {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .form {
   background: white;
   padding: 30px;

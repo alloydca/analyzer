@@ -25,6 +25,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Service configuration error' }, { status: 500 })
     }
 
+    console.log('[LEAD API] Submitting to URL:', brevoUrl)
+
     const res = await fetch(brevoUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -42,8 +44,7 @@ export async function POST(req: Request) {
     const data = await res.json().catch(() => ({}))
     return NextResponse.json({ success: true, data })
   } catch (error) {
+    console.error('[LEAD API] Error:', error)
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Unexpected error' }, { status: 500 })
   }
 }
-
-
