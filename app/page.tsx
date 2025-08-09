@@ -534,7 +534,14 @@ export default function Home() {
             score: 68,
             summary: "Basic SEO elements are present but could be enhanced. Product titles and descriptions need optimization for search visibility and AI understanding."
           },
-          inferredBrandPositioning: "Premium outdoor gear focused on quality and durability"
+          inferredBrandPositioning: "Premium outdoor gear focused on quality and durability",
+          problematicContent: [
+            {
+              content: "Buy now before it's gone!",
+              issue: "Generic urgency language that doesn't align with premium brand positioning",
+              location: "Product page CTA section"
+            }
+          ]
         },
         topProducts: [
           {
@@ -643,8 +650,7 @@ export default function Home() {
                   textDecoration: 'none',
                   fontWeight: '600'
                 }}
-                onMouseOver={(e) => e.target.style.textDecoration = 'underline'}
-                onMouseOut={(e) => e.target.style.textDecoration = 'none'}
+                
               >
                 contact us
               </a>
@@ -658,8 +664,7 @@ export default function Home() {
                   textDecoration: 'none',
                   fontWeight: '600'
                 }}
-                onMouseOver={(e) => e.target.style.textDecoration = 'underline'}
-                onMouseOut={(e) => e.target.style.textDecoration = 'none'}
+                
               >
                 sign up for our product today
               </a>
@@ -695,12 +700,14 @@ export default function Home() {
                   boxSizing: 'border-box'
                 }}
                 onFocus={(e) => {
-                  e.target.style.borderColor = '#3b82f6'
-                  e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)'
+                  const target = e.target as HTMLInputElement
+                  target.style.borderColor = '#3b82f6'
+                  target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)'
                 }}
                 onBlur={(e) => {
-                  e.target.style.borderColor = '#d1d5db'
-                  e.target.style.boxShadow = 'none'
+                  const target = e.target as HTMLInputElement
+                  target.style.borderColor = '#d1d5db'
+                  target.style.boxShadow = 'none'
                 }}
               />
             </div>
@@ -732,12 +739,14 @@ export default function Home() {
                   boxSizing: 'border-box'
                 }}
                 onFocus={(e) => {
-                  e.target.style.borderColor = '#3b82f6'
-                  e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)'
+                  const target = e.target as HTMLInputElement
+                  target.style.borderColor = '#3b82f6'
+                  target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)'
                 }}
                 onBlur={(e) => {
-                  e.target.style.borderColor = '#d1d5db'
-                  e.target.style.boxShadow = 'none'
+                  const target = e.target as HTMLInputElement
+                  target.style.borderColor = '#d1d5db'
+                  target.style.boxShadow = 'none'
                 }}
               />
             </div>
@@ -769,12 +778,14 @@ export default function Home() {
                   boxSizing: 'border-box'
                 }}
                 onFocus={(e) => {
-                  e.target.style.borderColor = '#3b82f6'
-                  e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)'
+                  const target = e.target as HTMLInputElement
+                  target.style.borderColor = '#3b82f6'
+                  target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)'
                 }}
                 onBlur={(e) => {
-                  e.target.style.borderColor = '#d1d5db'
-                  e.target.style.boxShadow = 'none'
+                  const target = e.target as HTMLInputElement
+                  target.style.borderColor = '#d1d5db'
+                  target.style.boxShadow = 'none'
                 }}
               />
             </div>
@@ -788,7 +799,7 @@ export default function Home() {
                 name="website_url"
                 value={honeypot}
                 onChange={(e) => setHoneypot(e.target.value)}
-                tabIndex="-1"
+                tabIndex={-1}
                 autoComplete="off"
               />
             </div>
@@ -822,18 +833,7 @@ export default function Home() {
                 transition: 'background-color 0.2s, transform 0.1s',
                 outline: 'none'
               }}
-              onMouseOver={(e) => {
-                e.target.style.backgroundColor = '#2563eb'
-              }}
-              onMouseOut={(e) => {
-                e.target.style.backgroundColor = '#3b82f6'
-              }}
-              onMouseDown={(e) => {
-                e.target.style.transform = 'translateY(1px)'
-              }}
-              onMouseUp={(e) => {
-                e.target.style.transform = 'translateY(0)'
-              }}
+              
             >
               Get Free Analysis
             </button>
@@ -923,8 +923,7 @@ export default function Home() {
                             fontWeight: '600',
                             fontSize: '16px'
                           }}
-                          onMouseOver={(e) => e.target.style.textDecoration = 'underline'}
-                          onMouseOut={(e) => e.target.style.textDecoration = 'none'}
+                          
                         >
                           Contact us here
                         </a>
@@ -937,8 +936,7 @@ export default function Home() {
                             fontWeight: '600',
                             fontSize: '16px'
                           }}
-                          onMouseOver={(e) => e.target.style.textDecoration = 'underline'}
-                          onMouseOut={(e) => e.target.style.textDecoration = 'none'}
+                          
                         >
                           sales@brandfuel.ai
                         </a>
@@ -969,14 +967,7 @@ export default function Home() {
                           borderRadius: '8px',
                           transition: 'background-color 0.2s, transform 0.1s'
                         }}
-                        onMouseOver={(e) => {
-                          e.target.style.backgroundColor = '#2563eb'
-                          e.target.style.transform = 'translateY(-1px)'
-                        }}
-                        onMouseOut={(e) => {
-                          e.target.style.backgroundColor = '#3b82f6'
-                          e.target.style.transform = 'translateY(0)'
-                        }}
+                        
                       >
                         Sign Up for Our Product Today!
                       </a>
@@ -1024,8 +1015,7 @@ export default function Home() {
                           cursor: 'pointer',
                           transition: 'background-color 0.2s'
                         }}
-                        onMouseOver={(e) => e.target.style.backgroundColor = '#b91c1c'}
-                        onMouseOut={(e) => e.target.style.backgroundColor = '#dc2626'}
+                        
                       >
                         Try Again
                       </button>
@@ -1067,8 +1057,7 @@ export default function Home() {
                         backgroundColor: '#f9f9f9',
                         transition: 'background-color 0.2s'
                       }}
-                      onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f0f0f0'}
-                      onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#f9f9f9'}
+                      
                     >
                       <strong>{link.text}</strong>
                       <br />
@@ -1148,14 +1137,7 @@ export default function Home() {
                     cursor: 'pointer',
                     transition: 'all 0.2s'
                   }}
-                  onMouseOver={(e) => {
-                    e.target.style.borderColor = '#9ca3af'
-                    e.target.style.color = '#374151'
-                  }}
-                  onMouseOut={(e) => {
-                    e.target.style.borderColor = '#d1d5db'
-                    e.target.style.color = '#6b7280'
-                  }}
+                  
                 >
                   Re-run Analysis
                 </button>
@@ -1197,14 +1179,7 @@ export default function Home() {
                 cursor: 'pointer',
                 transition: 'all 0.2s'
               }}
-              onMouseOver={(e) => {
-                e.target.style.borderColor = '#9ca3af'
-                e.target.style.color = '#374151'
-              }}
-              onMouseOut={(e) => {
-                e.target.style.borderColor = '#d1d5db'
-                e.target.style.color = '#6b7280'
-              }}
+              
             >
               Re-run Analysis
             </button>
@@ -1233,8 +1208,7 @@ export default function Home() {
                 cursor: 'pointer',
                 transition: 'background-color 0.2s'
               }}
-              onMouseOver={(e) => e.target.style.backgroundColor = '#e63900'}
-              onMouseOut={(e) => e.target.style.backgroundColor = '#ff4500'}
+              
             >
               Continue to Analysis
             </button>

@@ -9,6 +9,8 @@
     "allowJs": true,
     "skipLibCheck": true,
     "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
     "noEmit": true,
     "incremental": true,
     "module": "esnext",

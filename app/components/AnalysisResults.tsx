@@ -268,8 +268,12 @@ export default function AnalysisResults({ initialResults, analysis, topProducts,
               const shareUrl = `${currentUrl.origin}${currentUrl.pathname}?s=${encodedData}`
               
               // Show URL and copy to clipboard
-              document.getElementById('shareUrl').value = shareUrl
-              document.getElementById('shareUrlContainer').style.display = 'block'
+              const shareUrlInput = document.getElementById('shareUrl') as HTMLInputElement
+              const shareUrlContainer = document.getElementById('shareUrlContainer') as HTMLElement
+              if (shareUrlInput && shareUrlContainer) {
+                shareUrlInput.value = shareUrl
+                shareUrlContainer.style.display = 'block'
+              }
               navigator.clipboard.writeText(shareUrl)
               
               // Add note to Brevo that user shared results (only once)
@@ -287,12 +291,14 @@ export default function AnalysisResults({ initialResults, analysis, topProducts,
               }
               
               // Show feedback
-              const button = event.target
-              const originalText = button.textContent
-              button.textContent = 'Link Copied!'
-              setTimeout(() => {
-                button.textContent = originalText
-              }, 2000)
+              const button = event.target as HTMLButtonElement
+              if (button) {
+                const originalText = button.textContent
+                button.textContent = 'Link Copied!'
+                setTimeout(() => {
+                  button.textContent = originalText
+                }, 2000)
+              }
             }}
             style={{
               padding: '8px 16px',
