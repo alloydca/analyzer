@@ -1,24 +1,20 @@
 export interface DigitalSource {
-  type: 'website' | 'social' | 'reviews' | 'press' | 'about'
+  type: string
   source: string
   content: string
   url: string
 }
 
-export function extractBrandName(baseUrl: string): string {
-  try {
-    const domain = new URL(baseUrl).hostname.replace('www.', '')
-    return domain.split('.')[0]
-  } catch (error) {
-    return baseUrl.split('/')[2]?.replace('www.', '').split('.')[0] || 'company'
-  }
-}
-
 export function createDigitalSource(
-  type: DigitalSource['type'], 
+  type: string, 
   source: string, 
   content: string, 
   url: string
 ): DigitalSource {
-  return { type, source, content, url }
+  return {
+    type,
+    source,
+    content,
+    url
+  }
 }
