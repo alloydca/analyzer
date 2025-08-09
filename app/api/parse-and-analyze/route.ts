@@ -196,7 +196,7 @@ PROVIDED URLs:`;
       const { result, modelUsed, error } = await tryOpenAIChatJson<{ topProducts: Array<{ url: string; title: string; reason?: string }> }>(
         openai,
         [
-          { role: 'system', content: 'You are an expert e-commerce analyst. You must NEVER generate fictional URLs. Only use URLs provided in the prompt.' },
+          { role: 'system', content: 'You are an expert e-commerce analyst specializing in PRODUCT CONTENT. You must NEVER generate fictional URLs. Only use URLs provided in the prompt. Focus on selecting products with the best content quality and customer-facing information.' },
           { role: 'user', content: `${prompt}\n\n${urlList}` }
         ],
         { response_format: { type: 'json_object' }, temperature: 0.2 }

@@ -23,9 +23,9 @@ async function scoreCategory(
 
 FOCUS EXCLUSIVELY ON: ${categoryDescription}
 
-Analyze the following content from ${totalSources} digital sources (${pageCount} website pages + ${digitalSourceCount} external sources) and provide ONLY a score (1-100) and summary (1-3 sentences) for ${categoryTitle}:
+Analyze the following PRODUCT CONTENT from ${totalSources} digital sources (${pageCount} website pages + ${digitalSourceCount} external sources) and provide ONLY a score (1-100) and summary (1-3 sentences) for ${categoryTitle}:
 
-WEBSITE CONTENT:
+WEBSITE PRODUCT CONTENT:
 ${websiteContent}
 
 ${digitalContent ? `
@@ -34,21 +34,22 @@ ${digitalContent}
 ` : ''}
 
 CRITICAL INSTRUCTIONS:
-- Focus ONLY on ${categoryTitle} - ignore other aspects
-- Score based solely on evidence for this specific category
+- Focus ONLY on PRODUCT CONTENT and ${categoryTitle} - ignore technical implementation details like JavaScript, HTML, or CSS
+- Score based solely on evidence for this specific category found in product descriptions, messaging, and content
 - Be objective and evidence-based in your scoring
-- Provide specific examples from the content to justify your score
+- Provide specific examples from the PRODUCT CONTENT to justify your score
+- DO NOT comment on technical aspects, code, or website implementation
 
 Return your analysis in this JSON format:
 {
   "score": number (1-100),
-  "summary": "1-3 sentences with specific evidence for ${categoryTitle} score"
+  "summary": "1-3 sentences with specific evidence from PRODUCT CONTENT for ${categoryTitle} score"
 }`
 
   const { result: resultParsed, modelUsed } = await tryOpenAIChatJson<any>(openai, [
     {
       role: 'system',
-      content: `You are an expert e-commerce analyst specializing in ${categoryTitle}. Provide objective, evidence-based scoring with specific examples from the content.`
+      content: `You are an expert e-commerce analyst specializing in ${categoryTitle}. Focus exclusively on PRODUCT CONTENT analysis. Provide objective, evidence-based scoring with specific examples from product descriptions, messaging, and content. DO NOT comment on technical implementation, JavaScript, HTML, or CSS code.`
     },
     { role: 'user', content: prompt }
   ], { response_format: { type: 'json_object' }, temperature: 0.7 })
@@ -108,28 +109,33 @@ export async function analyzeConsolidated(
 
   // Process categories in parallel
   const results: Record<string, { score: number; summary: string }> = {}
-  const categoryPromises = shuffledCategories.map(async (category) => {
-    console.log(`Analyzing ${category.title}...`)
-    try {
-      const result = await scoreCategory(
-        category.key,
-        category.title,
-        category.description,
-        websiteContent,
-        digitalContent,
-        brandPositioning,
-        totalSources,
-        pageContents.length,
-        digitalSources.length
-      )
+  const categoryPromises = shuffledCategories.map((category) => {
+    console.log(`🚀 Starting analysis for ${category.title}...`)
+    return scoreCategory(
+      category.key,
+      category.title,
+      category.description,
+      websiteContent,
+      digitalContent,
+      brandPositioning,
+      totalSources,
+      pageContents.length,
+      digitalSources.length
+    ).then(result => {
       console.log(`✓ ${category.title}: ${result.score}/100`)
       results[category.key] = result
-    } catch (error) {
+      return { category: category.key, result }
+    }).catch(error => {
       console.error(`✗ Failed to analyze ${category.title}:`, error)
-      results[category.key] = { score: 0, summary: `Unable to analyze ${category.title}` }
-    }
+      const fallbackResult = { score: 0, summary: `Unable to analyze ${category.title}` }
+      results[category.key] = fallbackResult
+      return { category: category.key, result: fallbackResult }
+    })
   })
+  
+  console.log('⚡ Running all category analyses in parallel...')
   await Promise.allSettled(categoryPromises)
+  console.log('✅ All category analyses completed')
 
   // Generate executive summary based on all results
   console.log('Generating executive summary...')
@@ -229,20 +235,20 @@ export async function analyzeConsolidatedStreaming(
   // Process each category independently with separate API calls
   const results: Record<string, { score: number; summary: string }> = {}
 
-  for (let i = 0; i < shuffledCategories.length; i++) {
-    const category = shuffledCategories[i]
-    
-    console.log(`🔄 ANALYZING ${i + 1}/3: ${category.title}`)
-    
-    // Send progress update
-    onUpdate({
-      type: 'progress',
-      category: category.title,
-      step: i + 1,
-      total: 3,
-      message: `Analyzing ${category.title}... (${i + 1}/3)`
-    })
+  // Process categories in parallel with streaming updates
+  let completedCount = 0
 
+  // Send initial progress update
+  onUpdate({
+    type: 'progress',
+    step: 1,
+    total: 4,
+    message: 'Starting parallel analysis of all categories...'
+  })
+
+  const categoryPromises = shuffledCategories.map(async (category, index) => {
+    console.log(`🚀 Starting parallel analysis for ${category.title}...`)
+    
     try {
       const result = await scoreCategory(
         category.key,
@@ -257,8 +263,9 @@ export async function analyzeConsolidatedStreaming(
       )
       
       results[category.key] = result
+      completedCount++
       
-      console.log(`✅ COMPLETED ${i + 1}/3: ${category.title} = ${result.score}/100`)
+      console.log(`✅ COMPLETED: ${category.title} = ${result.score}/100 (${completedCount}/3 done)`)
       
       // Send completed category result immediately
       onUpdate({
@@ -267,28 +274,35 @@ export async function analyzeConsolidatedStreaming(
         categoryKey: category.key,
         score: result.score,
         summary: result.summary,
-        step: i + 1,
-        total: 3
+        step: 1,
+        total: 4,
+        message: `${category.title} completed: ${result.score}/100 (${completedCount}/3 categories done)`
       })
       
-      // Small delay between API calls (but not after the last one)
-      if (i < shuffledCategories.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 500))
-      }
+      return { category: category.key, result }
     } catch (error) {
-      console.error(`❌ FAILED ${i + 1}/3: ${category.title}`, error)
-      results[category.key] = { score: 0, summary: `Unable to analyze ${category.title}` }
+      console.error(`❌ FAILED: ${category.title}`, error)
+      const fallbackResult = { score: 0, summary: `Unable to analyze ${category.title}` }
+      results[category.key] = fallbackResult
+      completedCount++
       
       onUpdate({
         type: 'category_error',
         category: category.title,
         categoryKey: category.key,
         error: error instanceof Error ? error.message : 'Unknown error',
-        step: i + 1,
-        total: 3
+        step: 1,
+        total: 4,
+        message: `${category.title} failed: Unable to analyze (${completedCount}/3 categories done)`
       })
+      
+      return { category: category.key, result: fallbackResult }
     }
-  }
+  })
+
+  console.log('⚡ Running all category analyses in parallel...')
+  await Promise.allSettled(categoryPromises)
+  console.log('✅ All category analyses completed in parallel')
 
   // Generate executive summary
   console.log('📋 GENERATING EXECUTIVE SUMMARY...')
@@ -311,28 +325,34 @@ Analysis Results:
 
 Sources analyzed: ${totalSources} (${pageContents.length} website pages + ${digitalSources.length} external sources)
 
-Return JSON: {"executiveSummary": "3-5 sentences with strategic overview and recommendations"}`
+You MUST respond with valid JSON in exactly this format:
+{"executiveSummary": "3-5 sentences with strategic overview and recommendations"}`
 
   let executiveSummary = 'Unable to generate executive summary'
   try {
-    const summaryCompletion = await openai.chat.completions.create({
-      model: "gpt-4-turbo-preview",
-      messages: [
+    const summaryResponse = await tryOpenAIChatJson<{executiveSummary: string}>(
+      openai,
+      [
         {
           role: "system",
-          content: "You are an expert e-commerce strategist. Provide a high-level executive summary with actionable strategic recommendations."
+          content: "You are an expert e-commerce strategist analyzing PRODUCT CONTENT. You MUST respond with valid JSON containing an executiveSummary field. Focus exclusively on product messaging, content quality, and customer experience. DO NOT comment on technical implementation, JavaScript, HTML, or CSS. Do not include any text outside the JSON response."
         },
         {
           role: "user", 
           content: executiveSummaryPrompt
         }
       ],
-      response_format: { type: "json_object" },
-      temperature: 0.7,
-    })
+      {
+        response_format: { type: "json_object" },
+        temperature: 0.7,
+      }
+    )
 
-    const summaryResult = JSON.parse(summaryCompletion.choices[0].message.content || '{}')
-    executiveSummary = summaryResult.executiveSummary || 'Unable to generate executive summary'
+    if (summaryResponse.result?.executiveSummary) {
+      executiveSummary = summaryResponse.result.executiveSummary
+    } else {
+      console.error('Executive summary response missing executiveSummary field:', summaryResponse)
+    }
   } catch (error) {
     console.error('Failed to generate executive summary:', error)
   }

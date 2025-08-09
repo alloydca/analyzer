@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import OpenAI from 'openai'
+import { tryOpenAIChatJson } from '../../lib/aiModel'
 import { fetchPageContent } from '../../lib/fetchPage'
 import { analyzePage } from '../../lib/analyzePage'
 import { generateSummary } from '../../lib/generateSummary'
@@ -18,14 +19,14 @@ export async function POST(request: Request) {
     console.log('Fetched main page content, length:', mainPageContent.length)
 
     // Initial analysis to get top products and categories using the actual content
-    const initialAnalysis = await openai.chat.completions.create({
-      model: "gpt-4-turbo-preview",
-      messages: [
+    const { result: initialResults, modelUsed } = await tryOpenAIChatJson<InitialAnalysis>(
+      openai,
+      [
         {
           role: "system",
-          content: `You are an expert at analyzing e-commerce websites. Your task is to identify the top 10 product URLs and 2 category URLs from the given website content. 
+          content: `You are an expert at analyzing e-commerce websites for PRODUCT CONTENT. Your task is to identify the top 10 product URLs and 2 category URLs from the given website content. 
           
-          IMPORTANT: Only return URLs that actually exist in the provided content. Do not make up or invent URLs.
+          IMPORTANT: Only return URLs that actually exist in the provided content. Do not make up or invent URLs. Focus on finding actual product pages with meaningful content.
           
           Return the results in a structured JSON format with the following structure:
           {
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
               {
                 "url": "https://actualwebsite.com/actual-product-path",
                 "title": "Actual Product Title",
-                "description": "Brief description based on content"
+                "description": "Brief description based on product content"
               }
             ],
             "categories": [
@@ -45,24 +46,26 @@ export async function POST(request: Request) {
             ]
           }
           
-          If you cannot find enough products or categories, return fewer items rather than making up URLs.`
+          Focus on PRODUCT CONTENT quality and meaningful product information. If you cannot find enough products or categories, return fewer items rather than making up URLs.`
         },
         {
           role: "user",
-          content: `Analyze this website content and identify the top product URLs and category URLs. Base URL: ${url}
+          content: `Analyze this website content and identify the top product URLs and category URLs with the best PRODUCT CONTENT. Focus on finding pages with meaningful product information, descriptions, and customer-facing content. Base URL: ${url}
 
 Website Content:
 ${mainPageContent.slice(0, 8000)}`
         }
       ],
-      response_format: { type: "json_object" }
-    })
+      { response_format: { type: "json_object" }, temperature: 0.3 }
+    )
 
-    console.log('Raw OpenAI response:', initialAnalysis.choices[0].message.content)
-    const initialResults = JSON.parse(initialAnalysis.choices[0].message.content || '{}') as InitialAnalysis
+    console.log(`Raw OpenAI response (${modelUsed}):`, initialResults)
+    if (!initialResults) {
+      throw new Error('No results from OpenAI analysis')
+    }
     
     // Validate the response structure
-    if (!initialResults.products || !Array.isArray(initialResults.products) || 
+    if (!initialResults || !initialResults.products || !Array.isArray(initialResults.products) || 
         !initialResults.categories || !Array.isArray(initialResults.categories)) {
       console.error('Invalid response structure:', initialResults)
       throw new Error('Invalid response structure from OpenAI')

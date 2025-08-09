@@ -6,8 +6,8 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'SEO & AI Analysis Tool',
-  description: 'Analyze your website for SEO and AI optimization opportunities',
+  title: 'Product Content Analyzer',
+  description: 'Analyze your product pages for brand alignment, conversion effectiveness, and SEO/AI best practices.',
 }
 
 export default function RootLayout({

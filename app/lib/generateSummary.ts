@@ -1,4 +1,5 @@
 import OpenAI from 'openai'
+import { tryOpenAIChatJson } from './aiModel'
 import { AnalysisSummary, PageAnalysis } from '../types/analysis'
 
 const openai = new OpenAI({
@@ -6,9 +7,9 @@ const openai = new OpenAI({
 })
 
 export async function generateSummary(analyses: PageAnalysis[]): Promise<AnalysisSummary> {
-  const prompt = `Based on the following page analyses, generate an executive summary and identify the most critical issues and recommendations.
+  const prompt = `Based on the following PRODUCT CONTENT analyses, generate an executive summary and identify the most critical issues and recommendations.
 
-Page Analyses:
+Product Content Analyses:
 ${JSON.stringify(analyses, null, 2)}
 
 Return the analysis in a structured JSON format with the following structure:
@@ -22,22 +23,22 @@ Return the analysis in a structured JSON format with the following structure:
   "recommendations": string[]
 }
 
-Focus on the most critical issues first and provide actionable recommendations.`
+Focus on PRODUCT CONTENT quality and the most critical issues first. Provide actionable recommendations for improving product messaging and content. DO NOT comment on technical implementation, JavaScript, HTML, or CSS.`
 
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4-turbo-preview",
-    messages: [
+  const { result } = await tryOpenAIChatJson<AnalysisSummary>(
+    openai,
+    [
       {
         role: "system",
-        content: "You are an expert at analyzing web content and providing actionable recommendations."
+        content: "You are an expert at analyzing PRODUCT CONTENT and providing actionable recommendations. Focus exclusively on product messaging, descriptions, and customer-facing content. DO NOT comment on technical implementation, JavaScript, HTML, or CSS."
       },
       {
         role: "user",
         content: prompt
       }
     ],
-    response_format: { type: "json_object" }
-  })
+    { response_format: { type: "json_object" }, temperature: 0.7 }
+  )
 
-  return JSON.parse(completion.choices[0].message.content || '{}')
+  return result || { executiveSummary: '', topIssues: { generalQuality: [], seo: [], aiOptimization: [] }, recommendations: [] }
 } 

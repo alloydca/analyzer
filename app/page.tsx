@@ -40,6 +40,144 @@ export default function Home() {
   // SSE progress state
   const [sseMessages, setSseMessages] = useState<Array<{ type: string; message?: string; category?: string; step?: number; total?: number }>>([])
   const eventSourceRef = useRef<EventSource | null>(null)
+  // Lead capture gating
+  const [leadSubmitted, setLeadSubmitted] = useState(false)
+  const [leadName, setLeadName] = useState('')
+  const [leadEmail, setLeadEmail] = useState('')
+  const [leadWebsite, setLeadWebsite] = useState('')
+
+  const normalizeUrlValue = (value: string) => {
+    const trimmed = (value || '').trim()
+    if (!trimmed) return ''
+    return trimmed.startsWith('http://') || trimmed.startsWith('https://')
+      ? trimmed
+      : `https://${trimmed}`
+  }
+
+  const resetForNewRun = () => {
+    setIsLoading(true)
+    setError(null)
+    setResults(null)
+    setParseResults(null)
+    setExtractedLinks(null)
+    setSseMessages([])
+  }
+
+  const openParseSSE = (normalizedUrl: string) => {
+    // Close any existing stream
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close()
+      eventSourceRef.current = null
+    }
+
+    const sseUrl = `/api/parse-and-analyze-stream?url=${encodeURIComponent(normalizedUrl)}`
+    const es = new EventSource(sseUrl)
+    eventSourceRef.current = es
+    setSseMessages([{ type: 'start', message: 'Starting analysis…' }])
+
+    es.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        if (!data || !data.type) return
+
+        if (data.type === 'start') {
+          setSseMessages(prev => [...prev, { type: 'start', message: data.message }])
+        }
+        if (data.type === 'initial') {
+          setParseResults({
+            collections: data.collections || [],
+            topProducts: data.topProducts || [],
+            analysis: null,
+            stats: data.stats || undefined,
+          })
+          setSseMessages(prev => [...prev, { type: 'initial', message: 'Top products selected' }])
+        }
+        if (data.type === 'products_fetched') {
+          setSseMessages(prev => [...prev, { type: 'products_fetched', message: `Fetched ${data.count} product pages` }])
+          // Update stats with the actual number of products fetched
+          setParseResults(prev => prev ? { 
+            ...prev, 
+            stats: { 
+              ...prev.stats,
+              productsFetched: data.count 
+            }
+          } : prev)
+        }
+        if (data.type === 'progress') {
+          setSseMessages(prev => [...prev, { type: 'progress', message: data.message, category: data.category, step: data.step, total: data.total }])
+        }
+        if (data.type === 'category_complete') {
+          setSseMessages(prev => [...prev, { type: 'category_complete', message: `${data.category} complete`, category: data.category, step: data.step, total: data.total }])
+        }
+        if (data.type === 'complete') {
+          setParseResults(prev => prev ? { ...prev, analysis: data.analysis || null } : prev)
+          setSseMessages(prev => [...prev, { type: 'complete', message: 'Analysis complete' }])
+          // Send analysis to Brevo with the URL that was analyzed
+          sendAnalysisToBrevo(data.analysis, normalizedUrl)
+          es.close()
+          eventSourceRef.current = null
+          setIsLoading(false)
+        }
+        if (data.type === 'error') {
+          setError(data.error || 'Streaming failed')
+          setSseMessages(prev => [...prev, { type: 'error', message: data.error }])
+          es.close()
+          eventSourceRef.current = null
+          setIsLoading(false)
+        }
+      } catch (_) {
+        // ignore malformed events
+      }
+    }
+
+    es.onerror = () => {
+      setError('Streaming connection error')
+      setSseMessages(prev => [...prev, { type: 'error', message: 'Streaming connection error' }])
+      es.close()
+      eventSourceRef.current = null
+      setIsLoading(false)
+    }
+  }
+
+  const handleLeadSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    // Basic validation
+    if (!leadName.trim()) {
+      setError('Please enter your name')
+      return
+    }
+    if (!leadEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(leadEmail)) {
+      setError('Please enter a valid email address')
+      return
+    }
+    const normalized = normalizeUrlValue(leadWebsite)
+    if (!normalized) {
+      setError('Please enter a website URL')
+      return
+    }
+    // Post lead to backend which forwards to Brevo
+    ;(async () => {
+      try {
+        const resp = await fetch('/api/lead', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: leadName.trim(), email: leadEmail.trim(), url: normalized })
+        })
+        if (!resp.ok) {
+          const txt = await resp.text()
+          setError(txt || 'Failed to submit your info')
+          return
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to submit your info')
+        return
+      }
+      setUrl(normalized)
+      setLeadSubmitted(true)
+      resetForNewRun()
+      openParseSSE(normalized)
+    })()
+  }
 
 
   const [results, setResults] = useState<{
@@ -68,15 +206,7 @@ export default function Home() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    const normalizeUrl = (value: string) => {
-      const trimmed = value.trim()
-      if (!trimmed) return ''
-      return trimmed.startsWith('http://') || trimmed.startsWith('https://')
-        ? trimmed
-        : `https://${trimmed}`
-    }
-
-    const normalizedUrl = normalizeUrl(url)
+    const normalizedUrl = normalizeUrlValue(url)
     if (!normalizedUrl) {
       setError('Please enter a website URL')
       return
@@ -86,11 +216,7 @@ export default function Home() {
       setUrl(normalizedUrl)
     }
 
-    setIsLoading(true)
-    setError(null)
-    setResults(null)
-    setParseResults(null)
-    setExtractedLinks(null)
+    resetForNewRun()
 
     try {
       if (analysisMode === 'openai') {
@@ -112,75 +238,7 @@ export default function Home() {
         setResults(data)
       } else {
         // Parse homepage approach with SSE streaming
-        try {
-          // Close any existing stream
-          if (eventSourceRef.current) {
-            eventSourceRef.current.close()
-            eventSourceRef.current = null
-          }
-
-          const sseUrl = `/api/parse-and-analyze-stream?url=${encodeURIComponent(normalizedUrl)}`
-          const es = new EventSource(sseUrl)
-          eventSourceRef.current = es
-          setSseMessages([{ type: 'start', message: 'Starting analysis…' }])
-
-          es.onmessage = (event) => {
-            try {
-              const data = JSON.parse(event.data)
-              if (!data || !data.type) return
-
-              if (data.type === 'start') {
-                setSseMessages(prev => [...prev, { type: 'start', message: data.message }])
-              }
-              if (data.type === 'initial') {
-                // Show top products immediately
-                setParseResults({
-                  collections: data.collections || [],
-                  topProducts: data.topProducts || [],
-                  analysis: null,
-                  stats: data.stats || undefined,
-                })
-                setSseMessages(prev => [...prev, { type: 'initial', message: 'Top products selected' }])
-              }
-              if (data.type === 'products_fetched') {
-                setSseMessages(prev => [...prev, { type: 'products_fetched', message: `Fetched ${data.count} product pages` }])
-              }
-              if (data.type === 'progress') {
-                setSseMessages(prev => [...prev, { type: 'progress', message: data.message, category: data.category, step: data.step, total: data.total }])
-              }
-              if (data.type === 'category_complete') {
-                setSseMessages(prev => [...prev, { type: 'category_complete', message: `${data.category} complete`, category: data.category, step: data.step, total: data.total }])
-              }
-              if (data.type === 'complete') {
-                // Final analysis
-                setParseResults(prev => prev ? { ...prev, analysis: data.analysis || null } : prev)
-                setSseMessages(prev => [...prev, { type: 'complete', message: 'Analysis complete' }])
-                es.close()
-                eventSourceRef.current = null
-                setIsLoading(false)
-              }
-              if (data.type === 'error') {
-                setError(data.error || 'Streaming failed')
-                setSseMessages(prev => [...prev, { type: 'error', message: data.error }])
-                es.close()
-                eventSourceRef.current = null
-                setIsLoading(false)
-              }
-            } catch (_) {
-              // ignore malformed events
-            }
-          }
-
-          es.onerror = () => {
-            setError('Streaming connection error')
-            setSseMessages(prev => [...prev, { type: 'error', message: 'Streaming connection error' }])
-            es.close()
-            eventSourceRef.current = null
-            setIsLoading(false)
-          }
-        } catch (streamErr) {
-          throw streamErr
-        }
+        openParseSSE(normalizedUrl)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
@@ -193,6 +251,54 @@ export default function Home() {
       if (analysisMode === 'openai') {
         setIsLoading(false)
       }
+    }
+  }
+
+  const sendAnalysisToBrevo = async (analysis: any, analysisUrl?: string) => {
+    if (!analysis || !leadEmail) return
+    
+    const websiteUrl = analysisUrl || url
+    
+    try {
+      // Send structured JSON instead of unstructured text
+      const structuredAnalysis = {
+        type: 'product-content-analysis',
+        websiteUrl: websiteUrl,
+        analysisDate: new Date().toISOString().split('T')[0],
+        executiveSummary: analysis.executiveSummary || '',
+        brandPositioning: analysis.inferredBrandPositioning || '',
+        scores: {
+          brandAlignment: {
+            score: analysis.brandAlignment?.score || 0,
+            summary: analysis.brandAlignment?.summary || ''
+          },
+          conversionEffectiveness: {
+            score: analysis.conversionEffectiveness?.score || 0,
+            summary: analysis.conversionEffectiveness?.summary || ''
+          },
+          seoAiBestPractices: {
+            score: analysis.seoAiBestPractices?.score || 0,
+            summary: analysis.seoAiBestPractices?.summary || ''
+          }
+        },
+        overallScore: Math.round(((analysis.brandAlignment?.score || 0) + 
+                                 (analysis.conversionEffectiveness?.score || 0) + 
+                                 (analysis.seoAiBestPractices?.score || 0)) / 3)
+      }
+
+      await fetch('/api/brevo-notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contactEmail: leadEmail,
+          message: JSON.stringify(structuredAnalysis, null, 2),
+          noteType: 'product-analysis-json',
+          additionalData: structuredAnalysis
+        })
+      })
+    } catch (error) {
+      console.error('Failed to send analysis to Brevo:', error)
+      // Don't show error to user - this is background operation
     }
   }
 
@@ -231,35 +337,58 @@ export default function Home() {
   return (
     <div className="container">
       
-      <div className="form">
-        <h1>SEO Website Analyzer</h1>
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label htmlFor="url">Website URL</label>
-            <input
-              type="text"
-              id="url"
-              value={url}
-              onChange={handleUrlChange}
-              onBlur={handleUrlBlur}
-              placeholder="example.com or https://example.com"
-              required
-            />
+      {!leadSubmitted ? (
+        <div className="form">
+          <h1>Product Content Analyzer</h1>
+          <p style={{ marginBottom: '20px', color: '#555' }}>Get a comprehensive analysis of your product pages for brand alignment, conversion effectiveness, and SEO/AI best practices.</p>
+          <form onSubmit={handleLeadSubmit}>
+            <div className="form-group">
+              <label htmlFor="leadName">Your Name</label>
+              <input
+                type="text"
+                id="leadName"
+                value={leadName}
+                onChange={(e) => setLeadName(e.target.value)}
+                placeholder="Enter your full name"
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="leadEmail">Email Address</label>
+              <input
+                type="email"
+                id="leadEmail"
+                value={leadEmail}
+                onChange={(e) => setLeadEmail(e.target.value)}
+                placeholder="Enter your email address"
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="leadWebsite">Website URL</label>
+              <input
+                type="text"
+                id="leadWebsite"
+                value={leadWebsite}
+                onChange={(e) => setLeadWebsite(e.target.value)}
+                placeholder="example.com or https://example.com"
+                required
+              />
+            </div>
+            {error && <div className="error">{error}</div>}
+            <button type="submit" className="btn">
+              Get Free Analysis
+            </button>
+          </form>
+        </div>
+      ) : (
+        <>
+          <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+            <h1>Product Content Analyzer</h1>
+            <p style={{ color: '#555' }}>Analysis in progress for {url}</p>
           </div>
-
-          {/* Removed Analysis Approach selection; defaulting to parse mode */}
-
-          {error && <div className="error">{error}</div>}
-
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="btn"
-          >
-            {isLoading ? (analysisMode === 'openai' ? 'Analyzing...' : 'Analyzing...') : (analysisMode === 'openai' ? 'Analyze Website' : 'Analyze Site Content')}
-          </button>
-        </form>
-      </div>
+        </>
+      )}
 
 
 
@@ -344,9 +473,9 @@ export default function Home() {
               analysis={parseResults.analysis}
               topProducts={parseResults.topProducts}
               stats={parseResults.stats ? {
-                successful: parseResults.stats.productsFetched,
+                successful: parseResults.stats.productsFetched + parseResults.stats.collections,
                 failed: 0,
-                total: parseResults.stats.productsFetched,
+                total: parseResults.stats.productsFetched + parseResults.stats.collections,
                 productsCollected: parseResults.stats.productsFetched,
                 categoriesCollected: parseResults.stats.collections
               } : undefined}
