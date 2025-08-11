@@ -144,7 +144,7 @@ export default function AnalysisResults({ initialResults, analysis, topProducts,
         {/* Small Score Cards */}
         <div style={{ 
           display: 'grid', 
-          gridTemplateColumns: 'repeat(4, 1fr)', 
+          gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', 
           gap: '16px',
           marginBottom: '24px' 
         }}>
