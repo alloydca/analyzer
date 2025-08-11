@@ -146,7 +146,12 @@ export default function Home() {
         if (data.type === 'complete') {
           clearTimeout(overallTimeout)
           setParseResults(prev => {
-            const updated = prev ? { ...prev, analysis: data.analysis || null } : prev
+            const updated = prev ? { 
+              ...prev, 
+              analysis: data.analysis || null,
+              // Update topProducts with images if provided
+              topProducts: data.topProducts || prev.topProducts
+            } : prev
             // Cache the completed analysis
             if (updated) {
               localStorage.setItem('analysisResults', JSON.stringify({

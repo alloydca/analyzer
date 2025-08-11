@@ -6,6 +6,62 @@ import { analyzeConsolidatedStreaming } from '../../lib/analyzeConsolidated'
 import { createDigitalSource, DigitalSource } from '../../lib/gatherDigitalSources'
 import { tryOpenAIChatJson } from '../../lib/aiModel'
 
+// Function to extract the main product image from HTML
+function extractProductImage(html: string, baseUrl: string): string | null {
+  try {
+    const dom = new JSDOM(html, { url: baseUrl })
+    const document = dom.window.document
+    
+    // Common selectors for product images (ordered by priority)
+    const selectors = [
+      'img[data-src*="product"]',
+      'img[src*="product"]',
+      '.product-image img',
+      '.product-photo img',
+      '.product-gallery img:first-child',
+      '.main-image img',
+      '.hero-image img',
+      '.featured-image img',
+      'img[alt*="product"]',
+      'img[class*="product"]',
+      'picture img',
+      '.image-container img:first-child',
+      'main img:first-child',
+      'img[data-src]:first-of-type',
+      'img[src]:first-of-type'
+    ]
+    
+    for (const selector of selectors) {
+      const img = document.querySelector(selector) as HTMLImageElement
+      if (img) {
+        // Get the image URL (prefer data-src for lazy-loaded images, fallback to src)
+        let imageUrl = img.getAttribute('data-src') || img.getAttribute('src')
+        if (imageUrl) {
+          // Convert relative URLs to absolute
+          if (imageUrl.startsWith('//')) {
+            imageUrl = 'https:' + imageUrl
+          } else if (imageUrl.startsWith('/')) {
+            const base = new URL(baseUrl)
+            imageUrl = base.origin + imageUrl
+          } else if (!imageUrl.startsWith('http')) {
+            imageUrl = new URL(imageUrl, baseUrl).toString()
+          }
+          
+          // Validate it looks like an image URL
+          if (/\.(jpg|jpeg|png|webp|gif|svg)(\?|$)/i.test(imageUrl)) {
+            return imageUrl
+          }
+        }
+      }
+    }
+    
+    return null
+  } catch (error) {
+    console.error('Error extracting product image:', error)
+    return null
+  }
+}
+
 interface Link { url: string; text: string }
 interface CollectionGroup { collection: Link; products: Link[] }
 
@@ -213,16 +269,31 @@ PROVIDED URLs:`
           stats: { collections: collectionGroups.length, productsFetched: 0 }
         })}\n\n`))
 
-        // 4) Fetch HTML for each top product (parallel)
+        // 4) Fetch HTML for each top product (parallel) and extract images
         const pageFetchResults = await Promise.allSettled(
           validatedTopProducts.map(async (product) => {
             const html = await fetchHtml(product.url)
-            return { url: product.url, pageType: 'product', content: html } as PageContent
+            const image = extractProductImage(html, product.url)
+            return { 
+              url: product.url, 
+              pageType: 'product', 
+              content: html,
+              image: image
+            } as PageContent & { image: string | null }
           })
         )
-        const pageContents: PageContent[] = pageFetchResults
-          .filter((r): r is PromiseFulfilledResult<PageContent> => r.status === 'fulfilled')
+        const pageContents: (PageContent & { image: string | null })[] = pageFetchResults
+          .filter((r): r is PromiseFulfilledResult<PageContent & { image: string | null }> => r.status === 'fulfilled')
           .map(r => r.value)
+
+        // Update formattedTopProducts with images
+        const productsWithImages = formattedTopProducts.map(product => {
+          const pageContent = pageContents.find(p => p.url === product.url)
+          return {
+            ...product,
+            image: pageContent?.image || null
+          }
+        })
 
         if (pageContents.length === 0) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({
@@ -245,6 +316,10 @@ PROVIDED URLs:`
         
         // Stream the analysis
         await analyzeConsolidatedStreaming(pageContents, digitalSources, brandPos, (update) => {
+          // If this is the complete event, add the products with images
+          if (update.type === 'complete') {
+            update.topProducts = productsWithImages
+          }
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(update)}\n\n`))
         })
         

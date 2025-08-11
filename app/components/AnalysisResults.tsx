@@ -229,17 +229,120 @@ export default function AnalysisResults({ initialResults, analysis, topProducts,
           </div>
         </div>
         
-        {/* Share Link */}
+        {/* Call to Action and Share Link */}
         <div style={{
-          padding: '16px',
+          padding: '24px',
           backgroundColor: '#f9fafb',
           border: '1px solid #e5e7eb',
-          borderRadius: '8px',
-          textAlign: 'center'
+          borderRadius: '8px'
         }}>
-          <p style={{ margin: '0 0 12px 0', fontSize: '14px', color: '#444343' }}>
-            Want to share these results with your team?
-          </p>
+          {/* Call to Action based on score */}
+          {(() => {
+            const overallScore = Math.round((analysis.brandAlignment.score + analysis.conversionEffectiveness.score + analysis.seoAiBestPractices.score) / 3);
+            const scores = [
+              { name: 'Brand Alignment', score: analysis.brandAlignment.score },
+              { name: 'Conversion Effectiveness', score: analysis.conversionEffectiveness.score },
+              { name: 'SEO and AI Best Practices', score: analysis.seoAiBestPractices.score }
+            ];
+            const lowestCategory = scores.reduce((min, current) => current.score < min.score ? current : min);
+            const highestCategory = scores.reduce((max, current) => current.score > max.score ? current : max);
+            
+            if (overallScore >= 80) {
+              return (
+                <div style={{ marginBottom: '24px', textAlign: 'left' }}>
+                  <h3 style={{ 
+                    fontSize: '18px', 
+                    fontWeight: '600', 
+                    color: '#1a1a1a', 
+                    marginBottom: '16px' 
+                  }}>
+                    You are doing well!
+                  </h3>
+                  <p style={{ 
+                    fontSize: '16px', 
+                    lineHeight: '1.6', 
+                    color: '#374151', 
+                    marginBottom: '20px' 
+                  }}>
+                    Your scores are better than most but we still think we can help. In particular your score for <strong>{lowestCategory.name}</strong> shows room to improve, and with Brandfuel you'll save time writing all the different descriptions for all your sales channels. Additionally, we can help you create content that is relevant to each individual shopper and campaign. Click below to learn all the ways we can help.
+                  </p>
+                  <div style={{ textAlign: 'center' }}>
+                    <a 
+                      href="https://www.brandfuel.ai/get-started" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      style={{
+                        display: 'inline-block',
+                        padding: '12px 24px',
+                        fontSize: '16px',
+                        fontWeight: '600',
+                        color: '#ffffff',
+                        backgroundColor: '#ff4500',
+                        textDecoration: 'none',
+                        borderRadius: '8px',
+                        transition: 'background-color 0.2s',
+                        marginBottom: '24px'
+                      }}
+                    >
+                      Learn How We Can Help
+                    </a>
+                  </div>
+                </div>
+              );
+            } else {
+              return (
+                <div style={{ marginBottom: '24px', textAlign: 'left' }}>
+                  <h3 style={{ 
+                    fontSize: '18px', 
+                    fontWeight: '600', 
+                    color: '#1a1a1a', 
+                    marginBottom: '16px' 
+                  }}>
+                    There's room for improvement
+                  </h3>
+                  <p style={{ 
+                    fontSize: '16px', 
+                    lineHeight: '1.6', 
+                    color: '#374151', 
+                    marginBottom: '20px' 
+                  }}>
+                    While your score for <strong>{highestCategory.name}</strong> is your best, there is a lot of room for improvement. Did you know that Brandfuel uses AI to improve your content continuously and automatically? Click the button below to talk to us and learn how we can help you raise your content quality.
+                  </p>
+                  <div style={{ textAlign: 'center' }}>
+                    <a 
+                      href="https://www.brandfuel.ai/get-started" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      style={{
+                        display: 'inline-block',
+                        padding: '12px 24px',
+                        fontSize: '16px',
+                        fontWeight: '600',
+                        color: '#ffffff',
+                        backgroundColor: '#ff4500',
+                        textDecoration: 'none',
+                        borderRadius: '8px',
+                        transition: 'background-color 0.2s',
+                        marginBottom: '24px'
+                      }}
+                    >
+                      Talk to Us
+                    </a>
+                  </div>
+                </div>
+              );
+            }
+          })()}
+          
+          {/* Share section */}
+          <div style={{ 
+            borderTop: '1px solid #e5e7eb', 
+            paddingTop: '20px',
+            textAlign: 'center'
+          }}>
+            <p style={{ margin: '0 0 12px 0', fontSize: '14px', color: '#444343' }}>
+              Want to share these results with your team?
+            </p>
           <div id="shareUrlContainer" style={{ display: 'none', marginBottom: '12px' }}>
             <input
               type="text"
@@ -313,6 +416,7 @@ export default function AnalysisResults({ initialResults, analysis, topProducts,
           >
             Copy Share Link
           </button>
+          </div>
         </div>
       </div>
 
