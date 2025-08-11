@@ -677,6 +677,16 @@ export default function Home() {
             </p>
           </div>
           
+          <p style={{
+            fontSize: '14px',
+            color: '#6b7280',
+            lineHeight: '1.5',
+            fontStyle: 'italic',
+            marginBottom: '32px'
+          }}>
+            Please note: Our product content collector only works with sites that allow automatic browsing. Some sites block our analysis tools, but don't worry – we have other ways to help you improve your content!
+          </p>
+          
           <form onSubmit={handleLeadSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             <div>
               <label htmlFor="leadName" style={{
